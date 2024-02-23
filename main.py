@@ -1,6 +1,7 @@
 import pygame
 import random
 import pickle
+import datetime
 
 pygame.init()
 
@@ -105,6 +106,7 @@ class Player(SpaceShip):
 
     def game_over(self):
         game.change_state('over')
+        game.records.is_record(game.score)
 
     def draw(self):
         if self.hp > 0:
@@ -135,6 +137,7 @@ class Enemy(SpaceShip):
             game.score += 1
             game.hud.score.change(str(game.score))
             game.play.explosions.add(Explosion(*self.rect.center))
+        
             
 class Explosion(pygame.sprite.Sprite):
     def __init__(self, x, y, callback = None):
@@ -266,9 +269,10 @@ class GameManager():
         self.play = Gameplay()
         self.over = GameOver()
         self.menu = GameMenu()
+        self.records = GameRecords()
         self.hud =  HUD()
         self.score = 0
-        self.possible_states = ['play', 'over', 'menu']
+        self.possible_states = ['play', 'over', 'menu', 'records']
         pygame.mixer.music.load('assets/music.mp3')
         pygame.mixer.music.set_volume(0.1)
         pygame.mixer.music.play()
@@ -288,6 +292,9 @@ class GameManager():
             self.menu.update(events)
             self.menu.draw()
 
+        elif self.state == 'records':
+            self.records.draw()
+
     def change_state(self, state: str):
         if state in self.possible_states:
             self.state = state
@@ -301,6 +308,7 @@ class GameManager():
             events = pygame.event.get()
             for e in events:
                 if e.type == pygame.QUIT:
+                    self.records.is_record(self.score )
                     quit()
 
                 if e.type == pygame.KEYDOWN:
@@ -333,6 +341,8 @@ class GameMenu():
             if btn.on_click(events):
                 if btn_name == 'Играть':
                     game.change_state('play' if game.play.player.hp > 0 else 'over')
+                elif btn_name == 'Рекорды':
+                    game.change_state('records')
                 elif btn_name == 'Выход':
                     exit()
 
@@ -408,20 +418,69 @@ class GameOver():
     def update(self):
         pass
 
-class Records():
+class GameRecords():
     def __init__(self):
+        self.bg = pygame.transform.scale(pygame.image.load('assets/kosmos2.jpg'), (WIDTH, HEIGHT))
         file = open('records.pickle', 'rb')
         try:
-            self.records = pickle.load(file)
+            self.data = pickle.load(file)
         except:
             file.close()
             file = open('records.pickle', 'wb')
-            self.records = [['-', '-'] for i in range(5)]
-            pickle.dump(self.records)
-        self.labels = pygame.sprite.Group()
-        for row in self.records:
-            ...
+            self.data = [['-', '-'] for i in range(5)]
+            pickle.dump(self.data, file)
+        file.close()
+        self.records = []
+        for row in self.data:
+            if row[0].isdigit():
+                self.records.append(int(row[0]))
+        if len(self.records) == 0:
+            self.records.append(0)
+        self.update_labels()
 
+    def update_labels(self):
+        self.labels = []
+        for  i, row in enumerate(self.data):
+            self.labels.append([])
+            self.labels[i].append(
+                Text(row[0],
+                        30,
+                        WIDTH // 5,
+                        100 + i * (HEIGHT // 6)
+                )
+            )
+
+            self.labels[i].append(
+                Text(row[1],
+                        15,
+                        WIDTH // 2,
+                        100 + i * (HEIGHT // 6)
+                )
+            )
+    
+    def draw(self):
+        window.blit(self.bg, (0, 0))
+        for label in self.labels:
+            label[0].draw()
+            label[1].draw()
+    
+    def is_record(self, score):
+        if score > max(self.records):
+            self.update_data(score)
+            return True
+        return False
+        
+    def update_data(self, score):
+        self.data.pop(-1)
+        self.data.insert(0, [str(score), str(datetime.datetime.now().strftime('%d.%m.%Y %H:%M'))])
+        self.records = []
+        for row in self.data:
+            if row[0].isdigit():
+                self.records.append(int(row[0]))
+        file = open('records.pickle', 'wb')
+        pickle.dump(self.data, file)
+        file.close()
+        self.update_labels()
 
 game = GameManager()
 game.run()
